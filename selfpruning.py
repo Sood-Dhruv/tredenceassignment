@@ -73,7 +73,8 @@ def sparsity_loss(model):
     for layer in model.prunable_layers():
         gates = torch.sigmoid(layer.gate_scores)
         total = total + gates.sum()
-    return total
+    total_params = sum(layer.gate_scores.numel() for layer in model.prunable_layers())
+    return total / total_params
 
 
 #  Part 5: Training Loop 
@@ -117,7 +118,7 @@ def evaluate(model, test_loader, device):
     return 100.0 * correct / total
 
 
-def compute_sparsity(model, threshold=1e-2):
+def compute_sparsity(model, threshold=0.2):
     all_gates = []
     for layer in model.prunable_layers():
         gates = torch.sigmoid(layer.gate_scores).detach().cpu()
@@ -143,7 +144,7 @@ def main():
 
     train_loader, test_loader = get_loaders()
 
-    lambdas = [1e-4, 1e-3, 1e-2]
+    lambdas = [0.1, 0.3, 0.6]
     epochs = 10
     results = []
     best_model_gates = None
