@@ -91,8 +91,7 @@ def train(model, train_loader, lam, epochs, device):
             optimizer.zero_grad()
             outputs = model(images)
             ce_loss = criterion(outputs, labels)
-            total_params = sum(layer.gate_scores.numel() for layer in model.prunable_layers())
-            sp_loss = sparsity_loss(model) / total_params 
+            sp_loss = sparsity_loss(model) 
             loss = ce_loss + lam * sp_loss
 
             loss.backward()
