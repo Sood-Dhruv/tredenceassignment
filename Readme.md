@@ -17,6 +17,7 @@ The network learns to keep gates open only for useful weights. Useless weights g
 | 0.0    | 51.91       | 0.00         |
 | 1.0    | 52.27       | 1.92         |
 | 5.0    | 53.12       | 28.48        |
+| 10.0   | 53.07       | 52.31        |
 
 ## Analysis
 
@@ -24,19 +25,23 @@ With lambda = 0, there is no sparsity penalty. All gates stay open. No pruning h
 
 As lambda increases, the penalty pushes more gates toward 0. Sparsity goes up.
 
-Accuracy stays roughly the same across all three runs. This means the pruned weights were not useful. Removing them did not hurt the model.
+At lambda = 10.0, over half the weights are pruned. Accuracy is still 53.07%, almost identical to the baseline.
+
+This is the most important result. The network removed 52% of its weights and lost almost no accuracy. Those weights were not contributing anything useful.
 
 This shows the trade-off: higher lambda gives more pruning with little accuracy cost.
 
 ## Gate Distribution Plot
 
-The plot shows all gate values from the best model (lambda = 5.0).
+![Gate Value Distribution](gate_distribution.png)
 
-There is a spike near 0. These are the pruned weights — their gates were pushed closed by the sparsity loss.
+The plot shows gate values from the best model at lambda = 10.0.
 
-Some gates have high values, close to 1. These are the weights the network decided to keep.
+The large spike near 0 shows that most gates were pushed close to zero by the sparsity loss. These weights are effectively pruned.
 
-The two groups show the model learned to separate useful weights from useless ones.
+The distribution has a long tail toward 1.0. A small number of gates stayed open — these are the weights the network decided to keep.
+
+There is no clean two-cluster split. Most gates are near 0, but some are spread across the full range. This is expected with a strong lambda — the penalty is aggressive enough to close most gates but the network still keeps some partially active connections.
 
 ## Conclusion
 
@@ -44,4 +49,4 @@ The model successfully prunes itself during training. No manual pruning was need
 
 Higher lambda means more pruning. Lower lambda means the network stays dense.
 
-Accuracy does not drop much even with 28% sparsity. The method works.
+At lambda = 10.0, the model reaches 52% sparsity with no meaningful accuracy drop. The method works.
