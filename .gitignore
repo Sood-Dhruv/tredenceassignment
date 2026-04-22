@@ -1,0 +1,10 @@
+data/
+venv/
+
+pycache/
+*.pyc
+
+.vscode/
+
+.DS_Store
+Thumbs.db
