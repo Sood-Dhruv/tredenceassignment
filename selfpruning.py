@@ -14,10 +14,8 @@ class PrunableLinear(nn.Module):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(out_features, in_features))
         self.bias = nn.Parameter(torch.zeros(out_features))
-        # Init gate_scores to large negative → sigmoid ≈ 0 at start
-        # Network must actively "open" gates, not "close" them
-        self.gate_scores = nn.Parameter(torch.full((out_features, in_features), -3.0))
-
+        # Initialize gates to OPEN (positive), not closed
+        self.gate_scores = nn.Parameter(torch.full((out_features, in_features), 3.0))
         nn.init.kaiming_uniform_(self.weight, a=0.01)
 
     def forward(self, x):
@@ -79,12 +77,26 @@ def sparsity_loss(model):
 
 # Part 5: Training Loop
 
-def train(model, train_loader, lam, epochs, device):
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+def train(model, train_loader, lam, epochs, device, warmup_epochs=3):
+    weight_params = [p for n, p in model.named_parameters() if 'gate_scores' not in n]
+    gate_params   = [p for n, p in model.named_parameters() if 'gate_scores' in n]
+
+    optimizer = optim.Adam([
+        {'params': weight_params, 'lr': 1e-3},
+        {'params': gate_params,   'lr': 1e-2},
+    ])
     criterion = nn.CrossEntropyLoss()
     model.train()
 
     for epoch in range(epochs):
+        # Ramp λ from 0 → lam over the first 5 post-warmup epochs
+        if epoch < warmup_epochs:
+            effective_lam = 0.0
+        else:
+            ramp_epochs = 5
+            progress = min(1.0, (epoch - warmup_epochs) / ramp_epochs)
+            effective_lam = lam * progress
+
         running_ce = 0.0
         running_sp = 0.0
         for images, labels in train_loader:
@@ -94,16 +106,18 @@ def train(model, train_loader, lam, epochs, device):
             outputs = model(images)
             ce = criterion(outputs, labels)
             sp = sparsity_loss(model)
-            loss = ce + lam * sp
+            loss = ce + effective_lam * sp
 
             loss.backward()
             optimizer.step()
             running_ce += ce.item()
             running_sp += sp.item()
 
+        n = len(train_loader)
         print(f"  Epoch {epoch+1}/{epochs}  "
-              f"CE={running_ce/len(train_loader):.4f}  "
-              f"SP={running_sp/len(train_loader):.4f}")
+              f"CE={running_ce/n:.4f}  "
+              f"SP={running_sp/n:.4f}  "
+              f"λ_eff={effective_lam:.2f}")
 
 
 # Part 6: Evaluation
@@ -147,12 +161,13 @@ def main():
 
     train_loader, test_loader = get_loaders()
 
-    lambdas = [1.0, 5.0, 20.0]
+    lambdas = [0.0, 1.0, 5.0, 10.0]
     epochs = 15
     results = []
     best_model = None
     best_lam = None
     best_sparsity = -1
+    warmup_epochs = 3
 
     for lam in lambdas:
         print(f"\n{'='*50}")
@@ -160,7 +175,7 @@ def main():
         print('='*50)
 
         model = SelfPruningNet().to(device)
-        train(model, train_loader, lam, epochs, device)
+        train(model, train_loader, lam, epochs, device, warmup_epochs)
 
         acc      = evaluate(model, test_loader, device)
         sparsity = compute_sparsity(model)
